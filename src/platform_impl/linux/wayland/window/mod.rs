@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use sctk::reexports::client::protocol::wl_display::WlDisplay;
+use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use sctk::reexports::client::{Proxy, QueueHandle};
 
@@ -58,6 +59,16 @@ pub struct Window {
 
     /// Xdg activation to request user attention.
     xdg_activation: Option<XdgActivationV1>,
+
+    /// Latest `(wl_seat, serial)` observed on any focused input event
+    /// (currently `wl_pointer.button`). Shared with `WinitState` — the
+    /// pointer handler publishes here and this window reads it back at
+    /// activation-token issuance time to call
+    /// `xdg_activation_token_v1.set_serial(serial, &seat)` before
+    /// `commit()`. Without this call, mutter/kwin/sway refuse to activate
+    /// the target surface (tokens produced without a serial carry a
+    /// `_TIME0` suffix and are treated as focus-steal attempts).
+    latest_seat_serial: Arc<Mutex<Option<(WlSeat, u32)>>>,
 
     /// The state of the requested attention from the `xdg_activation`.
     attention_requested: Arc<AtomicBool>,
@@ -216,6 +227,8 @@ impl Window {
         let event_loop_awakener = event_loop_window_target.event_loop_awakener.clone();
         event_loop_awakener.ping();
 
+        let latest_seat_serial = state.latest_seat_serial.clone();
+
         Ok(Self {
             window,
             display,
@@ -225,6 +238,7 @@ impl Window {
             window_state,
             queue_handle,
             xdg_activation,
+            latest_seat_serial,
             attention_requested: Arc::new(AtomicBool::new(false)),
             event_loop_awakener,
             window_requests,
@@ -539,6 +553,15 @@ impl Window {
             Arc::downgrade(&self.attention_requested),
         ));
         let xdg_activation_token = xdg_activation.get_activation_token(&self.queue_handle, data);
+        // Seal the token with the last observed input serial so
+        // strict-focus-stealing compositors (mutter, kwin, sway strict)
+        // accept the activation. Without this the compositor issues a
+        // `_TIME0` token and refuses the ensuing activation. Missing
+        // seat/serial (client never saw an input event) leaves the
+        // token cold — best effort.
+        if let Some((seat, serial)) = self.latest_seat_serial.lock().unwrap().as_ref() {
+            xdg_activation_token.set_serial(*serial, seat);
+        }
         xdg_activation_token.set_surface(&surface);
         xdg_activation_token.commit();
     }
@@ -553,6 +576,13 @@ impl Window {
 
         let data = XdgActivationTokenData::Obtain((self.window_id, serial));
         let xdg_activation_token = xdg_activation.get_activation_token(&self.queue_handle, data);
+        // Seal the token with the last observed input serial. See the
+        // matching comment in `request_user_attention` — without it,
+        // strict-focus-stealing compositors reject the ensuing focus
+        // request emitted by whoever consumes the token.
+        if let Some((seat, latest_serial)) = self.latest_seat_serial.lock().unwrap().as_ref() {
+            xdg_activation_token.set_serial(*latest_serial, seat);
+        }
         xdg_activation_token.set_surface(self.surface());
         xdg_activation_token.commit();
 

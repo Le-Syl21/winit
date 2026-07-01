@@ -157,6 +157,14 @@ impl PointerHandler for WinitState {
                 | ref kind @ PointerEventKind::Release { button, serial, .. } => {
                     // Update the last button serial.
                     pointer.winit_data().inner.lock().unwrap().latest_button_serial = serial;
+                    // Also publish the (seat, serial) pair on the shared
+                    // slot used by `Window::request_activation_token` /
+                    // `Window::request_user_attention` to seal
+                    // xdg-activation tokens with `set_serial(...)` — mutter
+                    // and other compositors reject tokens issued without a
+                    // fresh input-event serial.
+                    *self.latest_seat_serial.lock().unwrap() =
+                        Some((pointer.winit_data().seat().clone(), serial));
 
                     let button = wayland_button_to_winit(button);
                     let state = if matches!(kind, PointerEventKind::Press { .. }) {
