@@ -577,13 +577,13 @@ impl Window {
                         seat.id()
                     );
                     xdg_activation_token.set_serial(*latest_serial, seat);
-                }
+                },
                 None => {
                     tracing::warn!(
                         target: "winit::wayland::activation",
                         "request_activation_token: no press serial recorded; token will be _TIME0 and strict compositors will refuse it"
                     );
-                }
+                },
             }
         }
         xdg_activation_token.set_surface(self.surface());

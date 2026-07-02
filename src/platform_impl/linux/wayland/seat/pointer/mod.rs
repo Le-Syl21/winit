@@ -180,10 +180,7 @@ impl PointerHandler for WinitState {
                             "pointer button press: serial={} recording on window state",
                             serial
                         );
-                        window.set_latest_press_serial(
-                            pointer.winit_data().seat().clone(),
-                            serial,
-                        );
+                        window.set_latest_press_serial(pointer.winit_data().seat().clone(), serial);
                     }
 
                     let button = wayland_button_to_winit(button);
