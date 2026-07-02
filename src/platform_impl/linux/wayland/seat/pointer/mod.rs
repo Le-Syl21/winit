@@ -163,13 +163,26 @@ impl PointerHandler for WinitState {
                     // xdg-activation tokens with `set_serial(...)` — mutter
                     // and other compositors reject tokens issued without a
                     // fresh input-event serial.
-                    tracing::info!(
-                        target: "winit::wayland::activation",
-                        "pointer button event: serial={} publishing to latest_seat_serial",
-                        serial
-                    );
-                    *self.latest_seat_serial.lock().unwrap() =
-                        Some((pointer.winit_data().seat().clone(), serial));
+                    //
+                    // Press only: compositors validate the activation serial
+                    // against the pointer's *grab serial*, which is updated
+                    // exclusively on button press (mutter:
+                    // meta-wayland-pointer.c sets grab_serial in the press
+                    // handler). Publishing the release serial too would
+                    // overwrite the press one — and since UI toolkits fire
+                    // their click actions on release, the token would then
+                    // be sealed with a serial the compositor doesn't
+                    // recognise, yielding a _TIME0 token that strict
+                    // focus-stealing compositors refuse.
+                    if matches!(kind, PointerEventKind::Press { .. }) {
+                        tracing::info!(
+                            target: "winit::wayland::activation",
+                            "pointer button press: serial={} publishing to latest_seat_serial",
+                            serial
+                        );
+                        *self.latest_seat_serial.lock().unwrap() =
+                            Some((pointer.winit_data().seat().clone(), serial));
+                    }
 
                     let button = wayland_button_to_winit(button);
                     let state = if matches!(kind, PointerEventKind::Press { .. }) {
