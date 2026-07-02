@@ -163,6 +163,11 @@ impl PointerHandler for WinitState {
                     // xdg-activation tokens with `set_serial(...)` — mutter
                     // and other compositors reject tokens issued without a
                     // fresh input-event serial.
+                    tracing::info!(
+                        target: "winit::wayland::activation",
+                        "pointer button event: serial={} publishing to latest_seat_serial",
+                        serial
+                    );
                     *self.latest_seat_serial.lock().unwrap() =
                         Some((pointer.winit_data().seat().clone(), serial));
 

@@ -580,8 +580,25 @@ impl Window {
         // matching comment in `request_user_attention` — without it,
         // strict-focus-stealing compositors reject the ensuing focus
         // request emitted by whoever consumes the token.
-        if let Some((seat, latest_serial)) = self.latest_seat_serial.lock().unwrap().as_ref() {
-            xdg_activation_token.set_serial(*latest_serial, seat);
+        {
+            let guard = self.latest_seat_serial.lock().unwrap();
+            match guard.as_ref() {
+                Some((seat, latest_serial)) => {
+                    tracing::info!(
+                        target: "winit::wayland::activation",
+                        "request_activation_token: sealing with serial={} seat_id={:?}",
+                        latest_serial,
+                        seat.id()
+                    );
+                    xdg_activation_token.set_serial(*latest_serial, seat);
+                }
+                None => {
+                    tracing::warn!(
+                        target: "winit::wayland::activation",
+                        "request_activation_token: latest_seat_serial=None; token will be _TIME0 and mutter will refuse it"
+                    );
+                }
+            }
         }
         xdg_activation_token.set_surface(self.surface());
         xdg_activation_token.commit();
