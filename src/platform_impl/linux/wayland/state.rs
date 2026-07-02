@@ -8,7 +8,6 @@ use sctk::reexports::calloop::LoopHandle;
 use sctk::reexports::client::backend::ObjectId;
 use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::protocol::wl_output::WlOutput;
-use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use sctk::reexports::client::{Connection, Proxy, QueueHandle};
 
@@ -95,19 +94,6 @@ pub struct WinitState {
     /// Xdg activation.
     pub xdg_activation: Option<XdgActivationState>,
 
-    /// Latest `(wl_seat, serial)` observed on any focused input event
-    /// (currently `wl_pointer.button`). Populated by the pointer handler
-    /// in `seat::pointer` and read by `Window::request_activation_token`
-    /// / `Window::request_user_attention` to seal xdg-activation tokens
-    /// with `set_serial(...)` — mutter and other compositors reject a
-    /// token issued without a fresh input-event serial (produces a
-    /// `_TIME0` token whose focus request is refused as a focus-steal).
-    ///
-    /// Cloned into every `Window` at creation so token-issuing methods
-    /// on the Window can read the latest serial without borrowing the
-    /// whole `WinitState`.
-    pub latest_seat_serial: Arc<Mutex<Option<(WlSeat, u32)>>>,
-
     /// Relative pointer.
     pub relative_pointer: Option<RelativePointerState>,
 
@@ -183,7 +169,6 @@ impl WinitState {
 
             xdg_shell: XdgShell::bind(globals, queue_handle).map_err(WaylandError::Bind)?,
             xdg_activation: XdgActivationState::bind(globals, queue_handle).ok(),
-            latest_seat_serial: Arc::new(Mutex::new(None)),
 
             windows: Default::default(),
             window_requests: Default::default(),

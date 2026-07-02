@@ -157,8 +157,8 @@ impl PointerHandler for WinitState {
                 | ref kind @ PointerEventKind::Release { button, serial, .. } => {
                     // Update the last button serial.
                     pointer.winit_data().inner.lock().unwrap().latest_button_serial = serial;
-                    // Also publish the (seat, serial) pair on the shared
-                    // slot used by `Window::request_activation_token` /
+                    // Also record the (seat, serial) pair on the window's
+                    // state, used by `Window::request_activation_token` /
                     // `Window::request_user_attention` to seal
                     // xdg-activation tokens with `set_serial(...)` — mutter
                     // and other compositors reject tokens issued without a
@@ -168,7 +168,7 @@ impl PointerHandler for WinitState {
                     // against the pointer's *grab serial*, which is updated
                     // exclusively on button press (mutter:
                     // meta-wayland-pointer.c sets grab_serial in the press
-                    // handler). Publishing the release serial too would
+                    // handler). Recording the release serial too would
                     // overwrite the press one — and since UI toolkits fire
                     // their click actions on release, the token would then
                     // be sealed with a serial the compositor doesn't
@@ -177,11 +177,13 @@ impl PointerHandler for WinitState {
                     if matches!(kind, PointerEventKind::Press { .. }) {
                         tracing::info!(
                             target: "winit::wayland::activation",
-                            "pointer button press: serial={} publishing to latest_seat_serial",
+                            "pointer button press: serial={} recording on window state",
                             serial
                         );
-                        *self.latest_seat_serial.lock().unwrap() =
-                            Some((pointer.winit_data().seat().clone(), serial));
+                        window.set_latest_press_serial(
+                            pointer.winit_data().seat().clone(),
+                            serial,
+                        );
                     }
 
                     let button = wayland_button_to_winit(button);

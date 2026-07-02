@@ -94,6 +94,15 @@ pub struct WindowState {
     /// Seats that has keyboard focus on that window.
     seat_focus: HashSet<ObjectId>,
 
+    /// The `(seat, serial)` of the last pointer button *press* received by
+    /// this window. Read when issuing xdg-activation tokens to call
+    /// `xdg_activation_token_v1.set_serial(...)` — compositors validate
+    /// that serial against the pointer's grab serial (which they update on
+    /// button press only) and mint an unusable token when it's missing or
+    /// stale, which strict focus-stealing compositors then refuse to act
+    /// on.
+    latest_press_serial: Option<(WlSeat, u32)>,
+
     /// The scale factor of the window.
     scale_factor: f64,
 
@@ -197,6 +206,7 @@ impl WindowState {
             frame: None,
             frame_callback_state: FrameCallbackState::None,
             seat_focus: Default::default(),
+            latest_press_serial: None,
             has_pending_move: None,
             ime_allowed: false,
             ime_purpose: ImePurpose::Normal,
@@ -232,6 +242,18 @@ impl WindowState {
             let data = pointer.pointer().winit_data();
             callback(pointer.as_ref(), data);
         })
+    }
+
+    /// Record the `(seat, serial)` of a pointer button press received by
+    /// this window, for later use when sealing xdg-activation tokens.
+    pub fn set_latest_press_serial(&mut self, seat: WlSeat, serial: u32) {
+        self.latest_press_serial = Some((seat, serial));
+    }
+
+    /// The `(seat, serial)` of the last pointer button press received by
+    /// this window, if any.
+    pub fn latest_press_serial(&self) -> Option<&(WlSeat, u32)> {
+        self.latest_press_serial.as_ref()
     }
 
     /// Get the current state of the frame callback.
